@@ -55,6 +55,13 @@
       const telaInicial = document.getElementById('tela-inicial');
       const musica = document.getElementById('musica-fundo');
 
+      // Garante loop continuo mesmo em navegadores com comportamento diferente
+      musica.loop = true;
+      musica.addEventListener('ended', function() {
+        musica.currentTime = 0;
+        musica.play();
+      });
+
       botao.addEventListener('click', function() {
         // 1. Toca a música (em loop contínuo)
         musica.play();
@@ -112,6 +119,83 @@
         }
       }
     });
+
+    // Gerador de fogos de artificio para enriquecer o cenario
+    AFRAME.registerComponent('gerador-de-fogos', {
+      init: function () {
+        const cena = this.el;
+        const coresExplosao = ['#FFD166', '#FF6B6B', '#4ECDC4', '#F7FFF7', '#F94144', '#F9C74F'];
+
+        const criarParticula = (origem, cor) => {
+          const particula = document.createElement('a-sphere');
+          const direcaoX = (Math.random() - 0.5) * 10;
+          const direcaoY = (Math.random() - 0.1) * 7;
+          const direcaoZ = (Math.random() - 0.5) * 10;
+          const destino = `${origem.x + direcaoX} ${origem.y + direcaoY} ${origem.z + direcaoZ}`;
+
+          particula.setAttribute('radius', 0.05 + Math.random() * 0.03);
+          particula.setAttribute('position', `${origem.x} ${origem.y} ${origem.z}`);
+          particula.setAttribute('color', cor);
+          particula.setAttribute('opacity', '0.95');
+          particula.setAttribute('animation__explodir', `property: position; to: ${destino}; dur: 1100; easing: easeOutQuad`);
+          particula.setAttribute('animation__sumir', 'property: material.opacity; to: 0; dur: 1100; easing: linear');
+
+          cena.appendChild(particula);
+          setTimeout(() => particula.parentNode && particula.parentNode.removeChild(particula), 1200);
+        };
+
+        const dispararFogo = () => {
+          const x = (Math.random() - 0.5) * 24;
+          const z = -3 - Math.random() * 18;
+          const alturaExplosao = 4 + Math.random() * 4;
+
+          const foguete = document.createElement('a-sphere');
+          foguete.setAttribute('radius', '0.06');
+          foguete.setAttribute('color', '#FFFFFF');
+          foguete.setAttribute('position', `${x} -2 ${z}`);
+          foguete.setAttribute('animation__subir', `property: position; to: ${x} ${alturaExplosao} ${z}; dur: 1200; easing: easeOutCubic`);
+
+          cena.appendChild(foguete);
+
+          setTimeout(() => {
+            if (foguete.parentNode) {
+              foguete.parentNode.removeChild(foguete);
+            }
+
+            const corBase = coresExplosao[Math.floor(Math.random() * coresExplosao.length)];
+            const totalParticulas = 42 + Math.floor(Math.random() * 24);
+            for (let i = 0; i < totalParticulas; i++) {
+              criarParticula({ x, y: alturaExplosao, z }, corBase);
+            }
+
+            const clarão = document.createElement('a-light');
+            clarão.setAttribute('type', 'point');
+            clarão.setAttribute('position', `${x} ${alturaExplosao} ${z}`);
+            clarão.setAttribute('color', corBase);
+            clarão.setAttribute('intensity', '2.6');
+            clarão.setAttribute('distance', '12');
+            clarão.setAttribute('animation', 'property: intensity; from: 2.6; to: 0; dur: 350; easing: easeOutQuad');
+            cena.appendChild(clarão);
+
+            setTimeout(() => clarão.parentNode && clarão.parentNode.removeChild(clarão), 450);
+          }, 1200);
+        };
+
+        setTimeout(() => {
+          dispararFogo();
+          this.intervaloFogos = setInterval(() => {
+            dispararFogo();
+            setTimeout(dispararFogo, 260);
+          }, 1200);
+        }, 1000);
+      },
+
+      remove: function () {
+        if (this.intervaloFogos) {
+          clearInterval(this.intervaloFogos);
+        }
+      }
+    });
   </script>
 </head>
 <body>
@@ -128,7 +212,9 @@
   </div>
 
   <video id="camera-fundo" autoplay playsinline></video>
-  <a-scene renderer="alpha: true" gerador-de-baloes vr-mode-ui="enabled: false">
+  <a-scene renderer="alpha: true" gerador-de-baloes gerador-de-fogos vr-mode-ui="enabled: false">
+    <a-entity light="type: ambient; color: #FFF3D6; intensity: 0.9"></a-entity>
+    <a-entity light="type: directional; color: #FFFFFF; intensity: 0.75" position="-1 2 1"></a-entity>
     <a-entity camera look-controls></a-entity>
   </a-scene>
 
