@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
   <title>AR Festa Junina</title>
   
-  <!-- Removemos o AR.js e mantemos apenas o A-Frame -->
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
 
   <style>
@@ -13,34 +12,70 @@
       margin: 0;
       overflow: hidden;
       background-color: black;
+      font-family: Arial, sans-serif;
     }
-    /* Estiliza o vídeo da câmera para preencher o fundo inteiro da tela */
     #camera-fundo {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+      top: 0; left: 0; width: 100vw; height: 100vh;
       object-fit: cover;
       z-index: -1;
+    }
+    
+    /* Estilos da nossa nova Tela Inicial */
+    #tela-inicial {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background-color: rgba(0, 0, 0, 0.85); /* Fundo escuro transparente */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999; /* Fica por cima de tudo */
+      color: white;
+      text-align: center;
+    }
+    #botao-comecar {
+      margin-top: 20px;
+      padding: 15px 40px;
+      font-size: 20px;
+      font-weight: bold;
+      background-color: #E74C3C; /* Vermelho junino */
+      color: white;
+      border: 3px dashed white;
+      border-radius: 15px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
   </style>
 
   <script>
-    // Ativa a câmera traseira do celular via JavaScript nativo
+    // Agora o script espera o clique no botão para fazer a mágica
     window.addEventListener('load', function() {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(function(stream) {
-          const video = document.getElementById('camera-fundo');
-          video.srcObject = stream;
-        })
-        .catch(function(erro) {
-          console.error("Erro ao acessar a câmera: ", erro);
-          alert("Por favor, permita o acesso à câmera para ver a mágica!");
-        });
+      const botao = document.getElementById('botao-comecar');
+      const telaInicial = document.getElementById('tela-inicial');
+      const musica = document.getElementById('musica-fundo');
+
+      botao.addEventListener('click', function() {
+        // 1. Toca a música (em loop contínuo)
+        musica.play();
+        
+        // 2. Esconde a tela inicial
+        telaInicial.style.display = 'none';
+
+        // 3. Pede permissão e liga a câmera
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(function(stream) {
+            const video = document.getElementById('camera-fundo');
+            video.srcObject = stream;
+          })
+          .catch(function(erro) {
+            console.error("Erro ao acessar a câmera: ", erro);
+            alert("Por favor, permita o acesso à câmera para ver a mágica!");
+          });
+      });
     });
 
-    // Nosso gerador de balões permanece intacto
+    // O gerador de balões continua igualzinho
     AFRAME.registerComponent('gerador-de-baloes', {
       init: function () {
         const cena = this.el;
@@ -81,17 +116,19 @@
 </head>
 <body>
   
-  <!-- A tag de vídeo que transmite a câmera traseira -->
-  <!-- playsinline é vital para funcionar em iPhones sem abrir o player de vídeo -->
-  <video id="camera-fundo" autoplay playsinline></video>
+  <!-- Nosso tocador de música invisível -->
+  <!-- A tag 'loop' faz a música voltar para o início quando acaba -->
+  <audio id="musica-fundo" src="musica.mp3" loop preload="auto"></audio>
 
-  <!-- Cena 3D configurada para ter o fundo transparente (renderer="alpha: true") -->
-  <a-scene 
-    renderer="alpha: true" 
-    gerador-de-baloes
-    vr-mode-ui="enabled: false"
-  >
-    <!-- A câmera do A-Frame que usa o giroscópio do celular automaticamente -->
+  <!-- Nossa Tela Inicial -->
+  <div id="tela-inicial">
+    <h1>Arraiá em AR!</h1>
+    <p>Aumente o som e olhe ao redor.</p>
+    <button id="botao-comecar">Entrar na Festa</button>
+  </div>
+
+  <video id="camera-fundo" autoplay playsinline></video>
+  <a-scene renderer="alpha: true" gerador-de-baloes vr-mode-ui="enabled: false">
     <a-entity camera look-controls></a-entity>
   </a-scene>
 
