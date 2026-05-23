@@ -150,21 +150,29 @@
             flashCaptura.style.opacity = '0';
           }, 100);
 
-          const imagem = quadro.toDataURL('image/jpeg', 0.92);
           const nomeArquivo = 'arraia-ar-' + Date.now() + '.jpg';
-          const link = document.createElement('a');
-          link.href = imagem;
-          link.download = nomeArquivo;
+          quadro.toBlob(function(blob) {
+            if (!blob) {
+              mostrarStatus('Falha ao gerar a foto.');
+              return;
+            }
 
-          if (typeof link.download === 'string') {
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            mostrarStatus('Foto salva no dispositivo.');
-          } else {
-            window.open(imagem, '_blank');
-            mostrarStatus('Foto aberta em nova aba.');
-          }
+            const imagem = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = imagem;
+            link.download = nomeArquivo;
+
+            if (typeof link.download === 'string') {
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              mostrarStatus('Foto salva no dispositivo.');
+            } else {
+              window.open(imagem, '_blank');
+              mostrarStatus('Foto aberta em nova aba.');
+            }
+          }, 'image/jpeg', 0.92);
         };
 
         // Forca um render do frame atual antes da leitura do canvas WebGL.
@@ -319,7 +327,7 @@
 
   <!-- Nossa Tela Inicial -->
   <div id="tela-inicial">
-    <h1>Arraiá em AR!</h1>
+    <h1>Festa Caipira em AR!</h1>
     <p>Aumente o som e olhe ao redor.</p>
     <button id="botao-comecar">Entrar na Festa</button>
   </div>
