@@ -62,7 +62,30 @@
       cursor: pointer;
       opacity: 0.92;
     }
+    #botao-video {
+      position: fixed;
+      left: 16px;
+      bottom: 18px;
+      z-index: 5000;
+      padding: 12px 18px;
+      border: none;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: bold;
+      background: #ffffff;
+      color: #222222;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+      opacity: 0.92;
+    }
+    #botao-video.gravando {
+      background: #c62828;
+      color: #ffffff;
+    }
     #botao-foto:active {
+      transform: scale(0.97);
+    }
+    #botao-video:active {
       transform: scale(0.97);
     }
     #flash-captura {
@@ -89,6 +112,22 @@
       transition: opacity 160ms linear;
       pointer-events: none;
     }
+    #contador-gravacao {
+      position: fixed;
+      left: 50%;
+      top: 16px;
+      transform: translateX(-50%);
+      background: rgba(198, 40, 40, 0.88);
+      color: #ffffff;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: bold;
+      z-index: 6500;
+      opacity: 0;
+      transition: opacity 140ms linear;
+      pointer-events: none;
+    }
   </style>
 
   <script>
@@ -96,11 +135,131 @@
     window.addEventListener('load', function() {
       const botao = document.getElementById('botao-comecar');
       const botaoFoto = document.getElementById('botao-foto');
+      const botaoVideo = document.getElementById('botao-video');
       const telaInicial = document.getElementById('tela-inicial');
       const musica = document.getElementById('musica-fundo');
       const flashCaptura = document.getElementById('flash-captura');
       const statusCaptura = document.getElementById('status-captura');
+      const contadorGravacao = document.getElementById('contador-gravacao');
       const cenaAr = document.getElementById('cena-ar');
+      const canvasGravacao = document.createElement('canvas');
+
+      const LIMITE_GRAVACAO_SEGUNDOS = 15;
+
+      let streamCameraAtual = null;
+      let mediaRecorder = null;
+      let fluxoGravacao = null;
+      let pedacoVideo = [];
+      let animacaoGravacaoId = null;
+      let tempoRestanteGravacao = LIMITE_GRAVACAO_SEGUNDOS;
+      let intervaloContadorId = null;
+      let timeoutAutoPararId = null;
+
+      const atualizarContador = function(segundos) {
+        contadorGravacao.textContent = 'Gravando: ' + segundos + 's';
+      };
+
+      const iniciarContadorGravacao = function() {
+        tempoRestanteGravacao = LIMITE_GRAVACAO_SEGUNDOS;
+        atualizarContador(tempoRestanteGravacao);
+        contadorGravacao.style.opacity = '1';
+
+        intervaloContadorId = setInterval(function() {
+          tempoRestanteGravacao -= 1;
+          if (tempoRestanteGravacao <= 0) {
+            tempoRestanteGravacao = 0;
+            atualizarContador(tempoRestanteGravacao);
+            clearInterval(intervaloContadorId);
+            intervaloContadorId = null;
+            return;
+          }
+
+          atualizarContador(tempoRestanteGravacao);
+        }, 1000);
+      };
+
+      const encerrarContadorGravacao = function() {
+        if (intervaloContadorId) {
+          clearInterval(intervaloContadorId);
+          intervaloContadorId = null;
+        }
+
+        if (timeoutAutoPararId) {
+          clearTimeout(timeoutAutoPararId);
+          timeoutAutoPararId = null;
+        }
+
+        contadorGravacao.style.opacity = '0';
+      };
+
+      const renderizarQuadroGravacao = function() {
+        if (!mediaRecorder || mediaRecorder.state !== 'recording') {
+          return;
+        }
+
+        const video = document.getElementById('camera-fundo');
+        const canvasAr = cenaAr && cenaAr.renderer && cenaAr.renderer.domElement
+          ? cenaAr.renderer.domElement
+          : (cenaAr ? cenaAr.canvas : null);
+
+        if (!video.srcObject || !canvasAr) {
+          animacaoGravacaoId = requestAnimationFrame(renderizarQuadroGravacao);
+          return;
+        }
+
+        const largura = video.videoWidth || window.innerWidth;
+        const altura = video.videoHeight || window.innerHeight;
+        if (canvasGravacao.width !== largura || canvasGravacao.height !== altura) {
+          canvasGravacao.width = largura;
+          canvasGravacao.height = altura;
+        }
+
+        const ctx = canvasGravacao.getContext('2d');
+        ctx.drawImage(video, 0, 0, largura, altura);
+        ctx.drawImage(canvasAr, 0, 0, largura, altura);
+
+        animacaoGravacaoId = requestAnimationFrame(renderizarQuadroGravacao);
+      };
+
+      const pararGravacao = function() {
+        if (!mediaRecorder) {
+          return;
+        }
+
+        encerrarContadorGravacao();
+
+        if (animacaoGravacaoId) {
+          cancelAnimationFrame(animacaoGravacaoId);
+          animacaoGravacaoId = null;
+        }
+
+        if (mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+        }
+
+        botaoVideo.classList.remove('gravando');
+        botaoVideo.textContent = 'Gravar Video';
+      };
+
+      const tipoMimeSuportado = function() {
+        const tipos = [
+          'video/webm;codecs=vp9',
+          'video/webm;codecs=vp8',
+          'video/webm'
+        ];
+
+        for (let i = 0; i < tipos.length; i++) {
+          if (
+            window.MediaRecorder &&
+            typeof MediaRecorder.isTypeSupported === 'function' &&
+            MediaRecorder.isTypeSupported(tipos[i])
+          ) {
+            return tipos[i];
+          }
+        }
+
+        return '';
+      };
 
       const mostrarStatus = function(mensagem) {
         statusCaptura.textContent = mensagem;
@@ -183,6 +342,115 @@
         requestAnimationFrame(capturarEExportar);
       });
 
+      botaoVideo.addEventListener('click', function() {
+        const video = document.getElementById('camera-fundo');
+
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          pararGravacao();
+          mostrarStatus('Finalizando video...');
+          return;
+        }
+
+        if (!window.MediaRecorder) {
+          mostrarStatus('Seu navegador nao suporta gravacao.');
+          return;
+        }
+
+        if (!video.srcObject || video.readyState < 2) {
+          mostrarStatus('Ative a camera primeiro.');
+          return;
+        }
+
+        const canvasAr = cenaAr && cenaAr.renderer && cenaAr.renderer.domElement
+          ? cenaAr.renderer.domElement
+          : (cenaAr ? cenaAr.canvas : null);
+
+        if (!canvasAr) {
+          mostrarStatus('Cena AR ainda carregando.');
+          return;
+        }
+
+        const largura = video.videoWidth || window.innerWidth;
+        const altura = video.videoHeight || window.innerHeight;
+        canvasGravacao.width = largura;
+        canvasGravacao.height = altura;
+
+        pedacoVideo = [];
+        fluxoGravacao = canvasGravacao.captureStream(30);
+
+        const tipoMime = tipoMimeSuportado();
+        try {
+          mediaRecorder = tipoMime
+            ? new MediaRecorder(fluxoGravacao, { mimeType: tipoMime })
+            : new MediaRecorder(fluxoGravacao);
+        } catch (erro) {
+          console.error('Erro ao iniciar MediaRecorder:', erro);
+          mostrarStatus('Nao foi possivel iniciar a gravacao.');
+          return;
+        }
+
+        mediaRecorder.ondataavailable = function(evento) {
+          if (evento.data && evento.data.size > 0) {
+            pedacoVideo.push(evento.data);
+          }
+        };
+
+        mediaRecorder.onstop = function() {
+          const blob = new Blob(pedacoVideo, { type: tipoMime || 'video/webm' });
+
+          if (fluxoGravacao) {
+            fluxoGravacao.getTracks().forEach(function(track) {
+              track.stop();
+            });
+          }
+
+          if (!blob || blob.size === 0) {
+            mostrarStatus('Falha ao gerar o video.');
+            mediaRecorder = null;
+            fluxoGravacao = null;
+            return;
+          }
+
+          const urlVideo = URL.createObjectURL(blob);
+          const nomeArquivo = 'arraia-ar-video-' + Date.now() + '.webm';
+          const link = document.createElement('a');
+          link.href = urlVideo;
+          link.download = nomeArquivo;
+
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          setTimeout(function() {
+            URL.revokeObjectURL(urlVideo);
+          }, 1500);
+
+          mostrarStatus('Video salvo no dispositivo.');
+          mediaRecorder = null;
+          fluxoGravacao = null;
+        };
+
+        mediaRecorder.start(250);
+        botaoVideo.classList.add('gravando');
+        botaoVideo.textContent = 'Parar Gravacao';
+        mostrarStatus('Gravando video...');
+        iniciarContadorGravacao();
+
+        timeoutAutoPararId = setTimeout(function() {
+          if (mediaRecorder && mediaRecorder.state === 'recording') {
+            pararGravacao();
+            mostrarStatus('Limite de 15s atingido.');
+          }
+        }, LIMITE_GRAVACAO_SEGUNDOS * 1000);
+
+        // Forca um render do frame atual antes de iniciar a captura continua.
+        if (cenaAr.renderer && cenaAr.object3D && cenaAr.camera) {
+          cenaAr.renderer.render(cenaAr.object3D, cenaAr.camera);
+        }
+
+        renderizarQuadroGravacao();
+      });
+
       botao.addEventListener('click', function() {
         // 1. Toca a música (em loop contínuo)
         musica.play();
@@ -195,11 +463,24 @@
           .then(function(stream) {
             const video = document.getElementById('camera-fundo');
             video.srcObject = stream;
+            streamCameraAtual = stream;
           })
           .catch(function(erro) {
             console.error("Erro ao acessar a câmera: ", erro);
             alert("Por favor, permita o acesso à câmera para ver a mágica!");
           });
+      });
+
+      window.addEventListener('beforeunload', function() {
+        if (streamCameraAtual) {
+          streamCameraAtual.getTracks().forEach(function(track) {
+            track.stop();
+          });
+        }
+
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+        }
       });
     });
 
@@ -332,7 +613,9 @@
     <button id="botao-comecar">Entrar na Festa</button>
   </div>
 
+  <button id="botao-video" type="button">Gravar Video</button>
   <button id="botao-foto" type="button">Tirar Foto</button>
+  <div id="contador-gravacao">Gravando: 15s</div>
   <div id="status-captura"></div>
   <div id="flash-captura"></div>
 
