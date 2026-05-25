@@ -155,6 +155,8 @@
       let tempoRestanteGravacao = LIMITE_GRAVACAO_SEGUNDOS;
       let intervaloContadorId = null;
       let timeoutAutoPararId = null;
+      let larguraGravacao = 0;
+      let alturaGravacao = 0;
 
       const atualizarContador = function(segundos) {
         contadorGravacao.textContent = 'Gravando: ' + segundos + 's';
@@ -217,12 +219,8 @@
           return;
         }
 
-        const largura = video.videoWidth || window.innerWidth;
-        const altura = video.videoHeight || window.innerHeight;
-        if (canvasGravacao.width !== largura || canvasGravacao.height !== altura) {
-          canvasGravacao.width = largura;
-          canvasGravacao.height = altura;
-        }
+        const largura = larguraGravacao || video.videoWidth || window.innerWidth;
+        const altura = alturaGravacao || video.videoHeight || window.innerHeight;
 
         const ctx = canvasGravacao.getContext('2d');
         ctx.drawImage(video, 0, 0, largura, altura);
@@ -234,6 +232,10 @@
       const pararGravacao = function() {
         if (!mediaRecorder) {
           return;
+        }
+
+        if (cenaAr && cenaAr.is('gravando')) {
+          cenaAr.removeState('gravando');
         }
 
         encerrarContadorGravacao();
@@ -380,10 +382,16 @@
           return;
         }
 
-        const largura = video.videoWidth || window.innerWidth;
-        const altura = video.videoHeight || window.innerHeight;
-        canvasGravacao.width = largura;
-        canvasGravacao.height = altura;
+        const larguraFonte = video.videoWidth || window.innerWidth;
+        const alturaFonte = video.videoHeight || window.innerHeight;
+        const maxLargura = 1280;
+        const maxAltura = 720;
+        const escala = Math.min(1, maxLargura / larguraFonte, maxAltura / alturaFonte);
+
+        larguraGravacao = Math.max(2, Math.round(larguraFonte * escala));
+        alturaGravacao = Math.max(2, Math.round(alturaFonte * escala));
+        canvasGravacao.width = larguraGravacao;
+        canvasGravacao.height = alturaGravacao;
 
         let streamMicrofoneTemporario = null;
         try {
@@ -401,7 +409,7 @@
         }
 
         pedacoVideo = [];
-        fluxoGravacao = canvasGravacao.captureStream(30);
+        fluxoGravacao = canvasGravacao.captureStream(24);
 
         if (streamMicrofoneAtual) {
           streamMicrofoneAtual.getAudioTracks().forEach(function(track) {
@@ -465,6 +473,7 @@
         };
 
         mediaRecorder.start(250);
+        cenaAr.addState('gravando');
         botaoVideo.classList.add('gravando');
         botaoVideo.textContent = 'Parar Gravacao';
         mostrarStatus(streamMicrofoneAtual ? 'Gravando video com microfone...' : 'Gravando video...');
@@ -580,11 +589,7 @@
         this.aplicarCamadaFrontal = aplicarCamadaFrontal;
       },
 
-      tick: function () {
-        if (this.aplicarCamadaFrontal) {
-          this.aplicarCamadaFrontal();
-        }
-      }
+      tick: undefined
     });
 
     AFRAME.registerComponent('camada-fundo', {
@@ -613,11 +618,7 @@
         }
       },
 
-      tick: function () {
-        if (this.aplicarCamada) {
-          this.aplicarCamada();
-        }
-      }
+      tick: undefined
     });
 
     // O gerador de balões continua igualzinho
@@ -626,7 +627,7 @@
         const cena = this.el;
         const cores = ['#FF5733', '#F4D03F', '#48C9B0', '#AF7AC5', '#E74C3C', '#5DADE2'];
         
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 70; i++) {
           let balao = document.createElement('a-entity');
           
           let x = (Math.random() - 0.5) * 35; 
@@ -685,6 +686,7 @@
         };
 
         const dispararFogo = () => {
+          const emGravacao = cena.is('gravando');
           const x = (Math.random() - 0.5) * 24;
           const z = -3 - Math.random() * 18;
           const alturaExplosao = 4 + Math.random() * 4;
@@ -704,7 +706,9 @@
             }
 
             const corBase = coresExplosao[Math.floor(Math.random() * coresExplosao.length)];
-            const totalParticulas = 42 + Math.floor(Math.random() * 24);
+            const totalParticulas = emGravacao
+              ? 16 + Math.floor(Math.random() * 12)
+              : 42 + Math.floor(Math.random() * 24);
             for (let i = 0; i < totalParticulas; i++) {
               criarParticula({ x, y: alturaExplosao, z }, corBase);
             }
@@ -725,8 +729,11 @@
         setTimeout(() => {
           dispararFogo();
           this.intervaloFogos = setInterval(() => {
+            const emGravacao = cena.is('gravando');
             dispararFogo();
-            setTimeout(dispararFogo, 260);
+            if (!emGravacao) {
+              setTimeout(dispararFogo, 260);
+            }
           }, 1200);
         }, 1000);
       },
