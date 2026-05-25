@@ -484,6 +484,105 @@
       });
     });
 
+    AFRAME.registerComponent('logo-overlay', {
+      schema: {
+        asset: { type: 'selector' },
+        baseHeight: { type: 'number', default: 0.38 }
+      },
+
+      init: function () {
+        const el = this.el;
+        const img = this.data.asset;
+
+        const ajustarProporcao = () => {
+          if (!img || !img.naturalWidth || !img.naturalHeight) {
+            return;
+          }
+
+          const proporcao = img.naturalWidth / img.naturalHeight;
+          const altura = this.data.baseHeight;
+          const largura = altura * proporcao;
+
+          el.setAttribute('height', altura);
+          el.setAttribute('width', largura);
+        };
+
+        const aplicarCamadaFrontal = () => {
+          el.object3D.renderOrder = 9999;
+          el.object3D.traverse(function (node) {
+            node.renderOrder = 9999;
+            node.frustumCulled = false;
+
+            if (node.isMesh) {
+              node.onBeforeRender = function (renderer) {
+                renderer.clearDepth();
+              };
+            }
+
+            if (node.material) {
+              node.material.depthTest = false;
+              node.material.depthWrite = false;
+              node.material.transparent = true;
+              node.material.needsUpdate = true;
+            }
+          });
+        };
+
+        if (img && img.complete) {
+          ajustarProporcao();
+        } else if (img) {
+          img.addEventListener('load', ajustarProporcao, { once: true });
+        }
+
+        if (el.hasLoaded) {
+          aplicarCamadaFrontal();
+        } else {
+          el.addEventListener('loaded', aplicarCamadaFrontal, { once: true });
+        }
+
+        this.aplicarCamadaFrontal = aplicarCamadaFrontal;
+      },
+
+      tick: function () {
+        if (this.aplicarCamadaFrontal) {
+          this.aplicarCamadaFrontal();
+        }
+      }
+    });
+
+    AFRAME.registerComponent('camada-fundo', {
+      schema: {
+        ordem: { type: 'number', default: 10 }
+      },
+
+      init: function () {
+        this.aplicarCamada = () => {
+          const ordem = this.data.ordem;
+          this.el.object3D.renderOrder = ordem;
+          this.el.object3D.traverse(function (node) {
+            node.renderOrder = ordem;
+            if (node.material) {
+              node.material.depthTest = true;
+              node.material.depthWrite = true;
+              node.material.needsUpdate = true;
+            }
+          });
+        };
+
+        if (this.el.hasLoaded) {
+          this.aplicarCamada();
+        } else {
+          this.el.addEventListener('loaded', this.aplicarCamada, { once: true });
+        }
+      },
+
+      tick: function () {
+        if (this.aplicarCamada) {
+          this.aplicarCamada();
+        }
+      }
+    });
+
     // O gerador de balões continua igualzinho
     AFRAME.registerComponent('gerador-de-baloes', {
       init: function () {
@@ -516,6 +615,7 @@
           
           balao.setAttribute('animation__voar', `property: position; to: ${x} ${alturaDestino} ${z}; loop: true; dur: ${duracao}; easing: linear`);
           balao.setAttribute('animation__girar', `property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear`);
+          balao.setAttribute('camada-fundo', 'ordem: 10');
 
           cena.appendChild(balao);
         }
@@ -539,6 +639,7 @@
           particula.setAttribute('position', `${origem.x} ${origem.y} ${origem.z}`);
           particula.setAttribute('color', cor);
           particula.setAttribute('opacity', '0.95');
+          particula.setAttribute('camada-fundo', 'ordem: 10');
           particula.setAttribute('animation__explodir', `property: position; to: ${destino}; dur: 1100; easing: easeOutQuad`);
           particula.setAttribute('animation__sumir', 'property: material.opacity; to: 0; dur: 1100; easing: linear');
 
@@ -555,6 +656,7 @@
           foguete.setAttribute('radius', '0.06');
           foguete.setAttribute('color', '#FFFFFF');
           foguete.setAttribute('position', `${x} -2 ${z}`);
+          foguete.setAttribute('camada-fundo', 'ordem: 10');
           foguete.setAttribute('animation__subir', `property: position; to: ${x} ${alturaExplosao} ${z}; dur: 1200; easing: easeOutCubic`);
 
           cena.appendChild(foguete);
@@ -621,9 +723,21 @@
 
   <video id="camera-fundo" autoplay playsinline></video>
   <a-scene id="cena-ar" renderer="alpha: true; preserveDrawingBuffer: true" gerador-de-baloes gerador-de-fogos vr-mode-ui="enabled: false">
+    <a-assets>
+      <img id="logo-ar" src="logo_ar.png" alt="Logo AR">
+    </a-assets>
+
     <a-entity light="type: ambient; color: #FFF3D6; intensity: 0.9"></a-entity>
     <a-entity light="type: directional; color: #FFFFFF; intensity: 0.75" position="-1 2 1"></a-entity>
-    <a-entity camera look-controls></a-entity>
+    <a-entity camera look-controls>
+      <a-image
+        id="logo-overlay"
+        src="#logo-ar"
+        logo-overlay="asset: #logo-ar; baseHeight: 1.00"
+        position="0 0.9 -1.5"
+        material="transparent: true; alphaTest: 0.05; depthTest: false; depthWrite: false; shader: flat; side: double"
+      ></a-image>
+    </a-entity>
   </a-scene>
 
 </body>
